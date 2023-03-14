@@ -35,16 +35,16 @@ jobs:
           file: Dockerfile.build
 
       - name: Compile
-        run: docker run --name build sparql-build make
+        run: docker run --name build rocksdb-build make librdf_storage_rocksdb.so
 
       - name: Extract executable
-        run: docker cp build:/build/sparql sparql
+        run: docker cp build:/build/librdf_storage_rocksdb.so librdf_storage_rocksdb.so
 
       - name: Upload executable
         uses: actions/upload-artifact@v3
         with:
-          name: sparql-executable
-          path: sparql
+          name: rocksdb-shared-library
+          path: librdf_storage_rocksdb.so
 
   # build-image:
   #   name: Docker image
