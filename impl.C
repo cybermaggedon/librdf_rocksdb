@@ -82,6 +82,11 @@ public:
     bytes limit;
     Iterator* iter;
     std::vector<bytes> triple;
+    unsigned int index;
+
+    static const unsigned int S = 0;
+    static const unsigned int P = 1;
+    static const unsigned int O = 2;
 
     void fetch();
     static void free(struct implementation_stream_t* impl);
@@ -471,6 +476,7 @@ struct implementation_stream_t* rocksdb_store::new_stream(
 
     stream->limit = limit;
     stream->iter = store->db->NewIterator(ReadOptions(), store->handles[index]);
+    stream->index = index;
 
     if (start.size() == 0)
 	stream->iter->SeekToFirst();
@@ -508,52 +514,51 @@ void rocksdb_stream::free(struct implementation_stream_t* impl)
 
 }
 
+// Given the index we fetched, this helps work out which part of the
+// key to return
+unsigned int mapping[3][3] = {
+    { 0, 1, 2 },    // SPO
+    { 2, 0, 1 },    // POS
+    { 1, 2, 0 },    // OSP
+};
+
 int rocksdb_stream::get_s(struct implementation_stream_t* impl,
 			  const char**data, size_t* len)
 {
-
     rocksdb_stream* stream = ((rocksdb_stream*) impl->stream);
 
-    if (!stream->iter->Valid())
-	return -1;
+    if (!stream->iter->Valid()) return -1;
 
-    *data = stream->triple[0].data();
-    *len = stream->triple[0].size();
-
+    int part = mapping[stream->index][S];
+    *data = stream->triple[part].data();
+    *len = stream->triple[part].size();
     return 0;
-
 }
 
 int rocksdb_stream::get_p(struct implementation_stream_t* impl,
 			  const char** data, size_t* len)
 {
-
     rocksdb_stream* stream = ((rocksdb_stream*) impl->stream);
 
-    if (!stream->iter->Valid())
-	return -1;
+    if (!stream->iter->Valid()) return -1;
 
-    *data = stream->triple[1].data();
-    *len = stream->triple[1].size();
-
+    int part = mapping[stream->index][P];
+    *data = stream->triple[part].data();
+    *len = stream->triple[part].size();
     return 0;
-
 }
 
 int rocksdb_stream::get_o(struct implementation_stream_t* impl,
 			  const char** data, size_t* len)
 {
-
     rocksdb_stream* stream = ((rocksdb_stream*) impl->stream);
 
-    if (!stream->iter->Valid())
-	return -1;
+    if (!stream->iter->Valid()) return -1;
 
-    *data = stream->triple[2].data();
-    *len = stream->triple[2].size();
-
+    int part = mapping[stream->index][O];
+    *data = stream->triple[part].data();
+    *len = stream->triple[part].size();
     return 0;
-
 }
 
 int rocksdb_stream::at_end(struct implementation_stream_t* impl)
