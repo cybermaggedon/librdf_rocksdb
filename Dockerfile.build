@@ -1,0 +1,16 @@
+
+FROM fedora:36
+
+RUN dnf install -y make gcc-c++
+RUN dnf install -y rasqal-devel redland-devel raptor2-devel
+RUN dnf install -y boost-devel
+
+WORKDIR /build
+
+ADD Makefile Makefile
+COPY rocksdb.c impl.C impl.h
+COPY redland/ redland/
+
+
+
+
