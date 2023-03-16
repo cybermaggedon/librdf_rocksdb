@@ -21,7 +21,7 @@
 #include <rdf_storage.h>
 #include <rdf_heuristics.h>
 
-#include "impl.h"
+#include "store.h"
 
 typedef struct
 {
