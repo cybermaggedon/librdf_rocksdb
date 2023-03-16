@@ -1,12 +1,12 @@
 
-= librdf_rocksdb =
+# librdf_rocksdb
 
-== Overview ==
+## Overview
 
 This is a plugin for Redland / librdf (see https://librdf.org/), which
 supports using a RocksDB key-value instance as storage.
 
-== RocksDB ==
+## RocksDB
 
 RocksDB is an open-source key/value store maintained by Facebook, built on
 earlier work by LevelDB.  It is highly performant for fast writes but can
@@ -23,14 +23,14 @@ plugin and then use all the Redland / librdf tools.  RocksDB only works
 with a single writer to the database, so no concurrent access is possible.
 If you want concurrent access you need to look at a larger-scale store.
 
-== This plugin ==
+## This plugin
 
 This plugin stores RDF triples in RocksDB by mapping the triples to
 key-values are storing them in RocksDB.  For each triple, three key-value
 pairs are stored in RocksDB using a specific encoding which only has
 meaning to this plugin.
 
-== Installation ==
+## Installation
 
 This is written in C and C++.  C is librdf's native language, and the C
 plugin interface wraps a C++ library.
@@ -46,7 +46,7 @@ library directory.  This may work for you:
 make install
 ```
 
-== SPARQL service on RocksDB ==
+## SPARQL service on RocksDB
 
 This repository also builds a container which supports a SPARQL service, by
 installing this plugin in the SPARQL service container at:
@@ -57,7 +57,7 @@ and publishes the container at:
 
   https://hub.docker.com/r/cybermaggedon/sparql-service-rocksdb
 
-== `sparql-service-rocksdb` ==
+## `sparql-service-rocksdb`
 
 The resultant container is able to provide a SPARQL service backed by a
 RocksDB store.  The container also contains the Redland `rdfproc` utility
