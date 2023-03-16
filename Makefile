@@ -32,7 +32,7 @@ test-sqlite.o: test.C
 test-rocksdb.o: test.C
 	${CXX} ${CXXFLAGS} -c $< -o $@ ${ROCKSDB_FLAGS}
 
-ROCKSDB_OBJECTS=rocksdb.o impl.o
+ROCKSDB_OBJECTS=rocksdb.o store.o
 
 librdf_storage_rocksdb.so: ${ROCKSDB_OBJECTS}
 	${CXX} ${CXXFLAGS} -shared -o $@ ${ROCKSDB_OBJECTS} -lrocksdb

@@ -9,7 +9,7 @@
 #include "rocksdb/slice.h"
 
 extern "C" {
-#include "impl.h"
+#include "store.h"
 }
 
 using ROCKSDB_NAMESPACE::DB;
@@ -45,15 +45,16 @@ public:
     std::vector<ColumnFamilyHandle*> handles;
 
     static void close(struct implementation_t* impl);
-    void _close();
+    void close();
 
     static void free(struct implementation_t* impl);
-    void _free();
+    void free();
 
     static int open(struct implementation_t* impl);
     int _open();
 
     static int size(struct implementation_t* impl);
+    int size();
 
 
     static bytes encode_key(const char* a, const char* b, const char* c);
@@ -64,16 +65,25 @@ public:
     static bytes encode_limit(const char* a = 0, const char* b = 0,
 			      const char* c = 0);
 
-//    static Slice make_value(const char* a);
     static int add(struct implementation_t* impl,
 		   char* s, char* p, char* o, char* c);
+    int add(char* s, char* p, char* o, char* c);
+
     static int remove(struct implementation_t* impl,
 		      char* s, char* p, char* o, char* c);
+    int remove(char* s, char* p, char* o, char* c);
+
     static int contains(struct implementation_t* impl,
 			char* s, char* p, char* o, char* c);
-    static struct implementation_stream_t* new_stream(
-	struct implementation_t *impl,
-	char*, char*, char*, char*);
+    int contains(char* s, char* p, char* o, char* c);
+
+    static struct implementation_stream_t*
+    new_stream(struct implementation_t *impl, char*, char*, char*, char*);
+    struct implementation_stream_t* new_stream(char* s, char* p,
+					       char* o, char* c);
+
+    implementation* impl;
+
 };
 
 class rocksdb_stream {
@@ -89,15 +99,28 @@ public:
     static const unsigned int O = 2;
 
     void fetch();
+
     static void free(struct implementation_stream_t* impl);
+    void free();
+
     static int get_s(struct implementation_stream_t* impl,
 		     const char**, size_t*);
+    int get_s(const char**, size_t*);
+
     static int get_p(struct implementation_stream_t* impl,
 		     const char**, size_t*);
+    int get_p(const char**, size_t*);
+
     static int get_o(struct implementation_stream_t* impl,
 		     const char**, size_t*);
+    int get_o(const char**, size_t*);
+
     static int at_end(struct implementation_stream_t* impl);
+    int at_end();
+
     static int next(struct implementation_stream_t* impl);
+    int next();
+
 };
 
 implementation* implementation_new(char* name, int sync, int is_new) {
@@ -108,6 +131,8 @@ implementation* implementation_new(char* name, int sync, int is_new) {
     store->is_new = is_new;
 
     implementation* impl = new implementation();
+
+    store->impl = impl;
 
     impl->store = (void *) store;
     impl->close = &rocksdb_store::close;
@@ -125,10 +150,10 @@ implementation* implementation_new(char* name, int sync, int is_new) {
 
 void rocksdb_store::close(struct implementation_t* impl) {
     rocksdb_store* store = ((rocksdb_store*) impl->store);
-    store->_close();
+    store->close();
 }
 
-void rocksdb_store::_close() {
+void rocksdb_store::close() {
 
     for (auto handle : handles) {
 	Status s = db->DestroyColumnFamilyHandle(handle);
@@ -139,10 +164,10 @@ void rocksdb_store::_close() {
 
 void rocksdb_store::free(struct implementation_t* impl) {
     rocksdb_store* store = ((rocksdb_store*) impl->store);
-    store->_free();
+    store->free();
 }
 
-void rocksdb_store::_free() {
+void rocksdb_store::free() {
     delete db;
     db = 0;
 }
@@ -195,12 +220,15 @@ int rocksdb_store::_open() {
 }
 
 int rocksdb_store::size(struct implementation_t* impl) {
-
     rocksdb_store* store = ((rocksdb_store*) impl->store);
+    return store->size();
+}
+
+int rocksdb_store::size() {
 
     std::string count;
-    if (!store->db->GetProperty(store->handles[0],
-				DB::Properties::kEstimateNumKeys, &count))
+    if (!db->GetProperty(handles[0],
+			 DB::Properties::kEstimateNumKeys, &count))
 	return -1;
 
     std::istringstream buf(count);
@@ -329,24 +357,33 @@ bytes rocksdb_store::encode_limit(
 
 }
 
+// FIXME: Contexts not used
+
 int rocksdb_store::add(struct implementation_t* impl,
 		       char* s, char* p, char* o, char* c)
 {
 
     rocksdb_store* store = ((rocksdb_store*) impl->store);
+    return store->add(s, p, o, c);
+
+}
+
+int rocksdb_store::add(char* s, char* p, char* o, char* c)
+{
+    
 
     bytes spo = encode_key(s, p, o);
     bytes pos = encode_key(p, o, s);
     bytes osp = encode_key(o, s, p);
 
-    store->db->Put(WriteOptions(), store->handles[SPO],
-		   Slice(spo.data(), spo.size()), Slice());
+    db->Put(WriteOptions(), handles[SPO],
+	    Slice(spo.data(), spo.size()), Slice());
 
-    store->db->Put(WriteOptions(), store->handles[POS],
-		   Slice(pos.data(), pos.size()), Slice());
+    db->Put(WriteOptions(), handles[POS],
+	    Slice(pos.data(), pos.size()), Slice());
 
-    store->db->Put(WriteOptions(), store->handles[OSP],
-		   Slice(osp.data(), osp.size()), Slice());
+    db->Put(WriteOptions(), handles[OSP],
+	    Slice(osp.data(), osp.size()), Slice());
 
     return 0;
 
@@ -356,54 +393,47 @@ int rocksdb_store::remove(struct implementation_t* impl,
 			  char* s, char* p, char* o, char* c)
 {
     rocksdb_store* store = ((rocksdb_store*) impl->store);
+    return store->remove(s, p, o, c);
+}
 
+int rocksdb_store::remove(char* s, char* p, char* o, char* c) 
+{
+    
     bytes spo = encode_key(s, p, o);
     bytes pos = encode_key(p, o, s);
     bytes osp = encode_key(o, s, p);
 
-    store->db->Delete(WriteOptions(), store->handles[SPO],
+    db->Delete(WriteOptions(), handles[SPO],
 		      Slice(spo.data(), spo.size()));
 
-    store->db->Delete(WriteOptions(), store->handles[POS],
+    db->Delete(WriteOptions(), handles[POS],
 		      Slice(pos.data(), pos.size()));
 
-    store->db->Delete(WriteOptions(), store->handles[OSP],
+    db->Delete(WriteOptions(), handles[OSP],
 		      Slice(osp.data(), osp.size()));
 
     return 0;
 }
 
-int rocksdb_store::contains(
-    struct implementation_t* impl,
-    char* s, char* p, char* o, char* c)
+int rocksdb_store::contains(struct implementation_t* impl,
+			    char* s, char* p, char* o, char* c)
 {
     rocksdb_store* store = ((rocksdb_store*) impl->store);
+    return store->contains(s, p, o, c);
+}
+
+int rocksdb_store::contains(char* s, char* p, char* o, char* c) 
+{
 
     PinnableSlice sl;
 
     bytes spo = encode_key(s, p, o);
 
-    Status st = store->db->Get(ReadOptions(),
-					store->handles[SPO],
-					Slice(spo.data(), spo.size()), &sl);
+    Status st = db->Get(ReadOptions(), handles[SPO],
+			Slice(spo.data(), spo.size()), &sl);
     if (!st.ok()) return -1;
 
     return 0;
-
-}
-
-std::string bin2hex(bytes s) {
-    std::ostringstream str;
-
-    for(int i = 0; i < s.size(); i++) {
-	unsigned ch = (unsigned char) s.data()[i];
-	
-
-	str << std::hex << std::setw(2) << std::setfill('0') <<
-	    (unsigned int) ch << " ";
-    }
-
-    return str.str();
 
 }
 
@@ -411,8 +441,13 @@ struct implementation_stream_t* rocksdb_store::new_stream(
     struct implementation_t *impl,
     char* s, char* p, char* o, char* c)
 {
-
     rocksdb_store* store = ((rocksdb_store*) impl->store);
+    return store->new_stream(s, p, o, c);
+}
+
+struct implementation_stream_t* rocksdb_store::new_stream(
+    char* s, char* p, char* o, char* c) 
+{
 
     rocksdb_stream* stream = new rocksdb_stream();
 
@@ -475,7 +510,7 @@ struct implementation_stream_t* rocksdb_store::new_stream(
     }
 
     stream->limit = limit;
-    stream->iter = store->db->NewIterator(ReadOptions(), store->handles[index]);
+    stream->iter = db->NewIterator(ReadOptions(), handles[index]);
     stream->index = index;
 
     if (start.size() == 0)
@@ -509,9 +544,15 @@ void rocksdb_stream::fetch()
 void rocksdb_stream::free(struct implementation_stream_t* impl)
 {
     rocksdb_stream* stream = ((rocksdb_stream*) impl->stream);
+    stream->free();
+}
 
-    delete stream->iter;
 
+
+void rocksdb_stream::free() 
+{
+    delete iter;
+    // FIXME: Is this freed?
 }
 
 // Given the index we fetched, this helps work out which part of the
@@ -526,12 +567,17 @@ int rocksdb_stream::get_s(struct implementation_stream_t* impl,
 			  const char**data, size_t* len)
 {
     rocksdb_stream* stream = ((rocksdb_stream*) impl->stream);
+    return stream->get_s(data, len);
+}
 
-    if (!stream->iter->Valid()) return -1;
+int rocksdb_stream::get_s(const char**data, size_t* len) 
+{
 
-    int part = mapping[stream->index][S];
-    *data = stream->triple[part].data();
-    *len = stream->triple[part].size();
+    if (!iter->Valid()) return -1;
+
+    int part = mapping[index][S];
+    *data = triple[part].data();
+    *len = triple[part].size();
     return 0;
 }
 
@@ -539,12 +585,17 @@ int rocksdb_stream::get_p(struct implementation_stream_t* impl,
 			  const char** data, size_t* len)
 {
     rocksdb_stream* stream = ((rocksdb_stream*) impl->stream);
+    return stream->get_p(data, len);
+}
 
-    if (!stream->iter->Valid()) return -1;
+int rocksdb_stream::get_p(const char** data, size_t* len) 
+{
 
-    int part = mapping[stream->index][P];
-    *data = stream->triple[part].data();
-    *len = stream->triple[part].size();
+    if (!iter->Valid()) return -1;
+
+    int part = mapping[index][P];
+    *data = triple[part].data();
+    *len = triple[part].size();
     return 0;
 }
 
@@ -552,28 +603,37 @@ int rocksdb_stream::get_o(struct implementation_stream_t* impl,
 			  const char** data, size_t* len)
 {
     rocksdb_stream* stream = ((rocksdb_stream*) impl->stream);
+    return stream->get_o(data, len);
+}
 
-    if (!stream->iter->Valid()) return -1;
+int rocksdb_stream::get_o(const char** data, size_t* len) 
+{
 
-    int part = mapping[stream->index][O];
-    *data = stream->triple[part].data();
-    *len = stream->triple[part].size();
+    if (!iter->Valid()) return -1;
+
+    int part = mapping[index][O];
+    *data = triple[part].data();
+    *len = triple[part].size();
     return 0;
 }
 
 int rocksdb_stream::at_end(struct implementation_stream_t* impl)
 {
     rocksdb_stream* stream = ((rocksdb_stream*) impl->stream);
+    return stream->at_end();
+}
 
-    if (!stream->iter->Valid()) {
+int rocksdb_stream::at_end() {
+
+    if (!iter->Valid()) {
 	return 1;
     }
 
-    Slice k = stream->iter->key();
+    Slice k = iter->key();
 
     bytes b = bytes(k.data(), k.data() + k.size());
 
-    if (b < stream->limit) {
+    if (b < limit) {
 	return 0;
     }
 
@@ -584,10 +644,16 @@ int rocksdb_stream::at_end(struct implementation_stream_t* impl)
 int rocksdb_stream::next(struct implementation_stream_t* impl)
 {
     rocksdb_stream* stream = ((rocksdb_stream*) impl->stream);
+    return stream->next();
+}
 
-    stream->iter->Next();
+int rocksdb_stream::next() 
+{
 
-    if (stream->iter->Valid()) stream->fetch();
+    iter->Next();
+
+    if (iter->Valid())
+	fetch();
 
     return 0;
 
